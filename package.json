@@ -3,6 +3,11 @@
   "version": "0.1.0",
   "description": "Shared, framework-agnostic UI components (FilterBar, Log Time / mention editor) reused across Awtomated host app and micro-frontends.",
   "main": "dist/index.js",
+  "exports": {
+    ".": "./dist/index.js",
+    "./MentionEditor": "./dist/components/MentionEditor/index.js",
+    "./RichTextFormattingToolbar": "./dist/components/RichTextFormattingToolbar/index.js"
+  },
   "files": [
     "dist"
   ],
@@ -22,6 +27,12 @@
     "@tiptap/suggestion": "^2.0.0",
     "@tiptap/extension-placeholder": "^2.0.0",
     "@tiptap/extension-mention": "^2.0.0",
+    "@tiptap/extension-underline": "^2.0.0",
+    "@tiptap/extension-text-style": "^2.0.0",
+    "@tiptap/extension-font-family": "^2.0.0",
+    "@tiptap/extension-text-align": "^2.0.0",
+    "@tiptap/extension-task-list": "^2.0.0",
+    "@tiptap/extension-task-item": "^2.0.0",
     "react-window": "^1.0.0 || ^2.0.0"
   },
   "peerDependenciesMeta": {
@@ -32,6 +43,12 @@
     "@tiptap/suggestion": { "optional": true },
     "@tiptap/extension-placeholder": { "optional": true },
     "@tiptap/extension-mention": { "optional": true },
+    "@tiptap/extension-underline": { "optional": true },
+    "@tiptap/extension-text-style": { "optional": true },
+    "@tiptap/extension-font-family": { "optional": true },
+    "@tiptap/extension-text-align": { "optional": true },
+    "@tiptap/extension-task-list": { "optional": true },
+    "@tiptap/extension-task-item": { "optional": true },
     "react-window": { "optional": true }
   },
   "devDependencies": {

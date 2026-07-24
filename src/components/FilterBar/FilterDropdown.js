@@ -2,6 +2,7 @@ import List from "@mui/material/List";
 import ListItemButton from "@mui/material/ListItemButton";
 import ListItemText from "@mui/material/ListItemText";
 import Checkbox from "@mui/material/Checkbox";
+import Tooltip from "@mui/material/Tooltip";
 
 // Compact single/multi-select option list shown inside a FilterChip's
 // popover - a plain menu-style list rather than a search-field Autocomplete.
@@ -41,7 +42,13 @@ function FilterDropdown({ options, value, multiple = false, onChange }) {
               sx={{ p: 0, mr: "8px" }}
             />
           )}
-          <ListItemText primary={option.title} />
+          <Tooltip title={option.title} enterDelay={500} enterNextDelay={500}>
+            <ListItemText
+              primary={option.title}
+              primaryTypographyProps={{ noWrap: true, sx: { textOverflow: "ellipsis" } }}
+              sx={{ minWidth: 0 }}
+            />
+          </Tooltip>
         </ListItemButton>
       ))}
     </List>

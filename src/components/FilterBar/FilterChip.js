@@ -10,6 +10,8 @@ import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 // (globalRadius.chip = 16, globalRadius.popover = 8), inlined here so this
 // package has no dependency on main-app's internal design-token module -
 // other consumers (micro-frontends) won't necessarily have @fuse/* at all.
+// This mirrors main-app's Timesheet FilterChip.js pixel-for-pixel so every
+// filter dropdown across the app (Timesheet, Notes, ...) looks identical.
 const CHIP_RADIUS = 16;
 const POPOVER_RADIUS = 8;
 
