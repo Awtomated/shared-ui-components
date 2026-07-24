@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git fetch *)",
+      "Bash(node -e \"console.log\\(require\\('fs'\\).lstatSync\\('node_modules/@awtomated/shared-ui'\\).isSymbolicLink\\(\\)\\)\")"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\Surya Pratap Biswal\\Desktop\\Assystant\\In-Progress-Modules\\main-app",
+      "c:\\Users\\Surya Pratap Biswal\\Desktop\\Assystant\\In-Progress-Modules\\file-management-mf",
+      "c:\\Users\\Surya Pratap Biswal\\Desktop\\Assystant\\In-Progress-Modules\\notes-mf"
+    ]
+  }
+}
