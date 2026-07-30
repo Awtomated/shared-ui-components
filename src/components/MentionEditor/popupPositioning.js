@@ -12,46 +12,75 @@ function positionPopup(popupEl, clientRectFn) {
 }
 
 /**
+ * Mounts ListComponent via ReactRenderer into a manually absolutely-
+ * positioned div appended to document.body (no tippy.js dependency). Shared
+ * by mountFloatingList (Suggestion-driven @/"/" triggers) and
+ * entityPickerPopup.js's button-driven Insert Link picker - both need the
+ * same mount/reposition/teardown plumbing, just fed by different lifecycles
+ * (a ProseMirror Suggestion vs. a plain click handler).
+ */
+export function createFloatingPanel(ListComponent, initialProps, editor) {
+  const component = new ReactRenderer(ListComponent, {
+    props: initialProps,
+    editor,
+  });
+  const popupEl = document.createElement("div");
+  popupEl.style.position = "absolute";
+  popupEl.style.zIndex = String(POPUP_Z_INDEX);
+  document.body.appendChild(popupEl);
+  popupEl.appendChild(component.element);
+
+  return {
+    element: popupEl,
+    get ref() {
+      return component.ref;
+    },
+    reposition: (clientRectFn) => positionPopup(popupEl, clientRectFn),
+    setHidden: (hidden) => {
+      popupEl.style.display = hidden ? "none" : "";
+    },
+    updateProps: (props) => component.updateProps(props),
+    destroy: () => {
+      popupEl.remove();
+      component.destroy();
+    },
+  };
+}
+
+/**
  * Builds the {onStart, onUpdate, onKeyDown, onExit} lifecycle Tiptap's
- * Suggestion `render()` expects: mounts ListComponent via ReactRenderer into a
- * manually absolutely-positioned div appended to document.body (no tippy.js
- * dependency), repositioned from the trigger's clientRect() on every update.
+ * Suggestion `render()` expects, on top of createFloatingPanel above.
  * extraProps are merged into every render so a trigger can pin a static mode
  * (e.g. { mode: "grouped" } for @mention) without duplicating this plumbing.
  */
 export function mountFloatingList(ListComponent, extraProps = {}) {
-  let component = null;
-  let popupEl = null;
+  let panel = null;
   let dismissed = false;
 
   return {
     onStart: (props) => {
       dismissed = false;
-      component = new ReactRenderer(ListComponent, {
-        props: { ...props, ...extraProps },
-        editor: props.editor,
-      });
-      popupEl = document.createElement("div");
-      popupEl.style.position = "absolute";
-      popupEl.style.zIndex = String(POPUP_Z_INDEX);
-      document.body.appendChild(popupEl);
-      popupEl.appendChild(component.element);
-      positionPopup(popupEl, props.clientRect);
+      panel = createFloatingPanel(
+        ListComponent,
+        { ...props, ...extraProps },
+        props.editor
+      );
+      panel.reposition(props.clientRect);
     },
     onUpdate: (props) => {
-      component?.updateProps({ ...props, ...extraProps });
-      positionPopup(popupEl, props.clientRect);
-      if (!dismissed && popupEl) popupEl.style.display = "";
+      panel?.updateProps({ ...props, ...extraProps });
+      panel?.reposition(props.clientRect);
+      if (!dismissed) panel?.setHidden(false);
     },
     onKeyDown: (props) => {
       if (props.event.key === "Escape") {
         dismissed = true;
-        if (popupEl) popupEl.style.display = "none";
+        panel?.setHidden(true);
         props.event.preventDefault();
         props.event.stopPropagation();
         return true;
       }
-      const handled = component?.ref?.onKeyDown(props) ?? false;
+      const handled = panel?.ref?.onKeyDown(props) ?? false;
       if (handled) {
         props.event.preventDefault();
         props.event.stopPropagation();
@@ -59,10 +88,8 @@ export function mountFloatingList(ListComponent, extraProps = {}) {
       return handled;
     },
     onExit: () => {
-      popupEl?.remove();
-      component?.destroy();
-      popupEl = null;
-      component = null;
+      panel?.destroy();
+      panel = null;
     },
   };
 }

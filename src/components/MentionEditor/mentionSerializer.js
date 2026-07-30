@@ -5,6 +5,11 @@ export function extractMentions(content) {
   return (content || []).filter((node) => node.type === "mention");
 }
 
+/** Returns just the entityLink nodes (Insert Link) out of a structured description's content array. */
+export function extractEntityLinks(content) {
+  return (content || []).filter((node) => node.type === "entityLink");
+}
+
 /**
  * Pairs each moduleChip with the entityChip immediately following it (same
  * moduleKey) - the shape "/Project" + "BMW Manual 2025" resolves to. A
@@ -38,6 +43,10 @@ function moduleChipPlainText(attrs) {
 }
 
 function entityChipPlainText(attrs) {
+  return attrs.entityLabel;
+}
+
+function entityLinkPlainText(attrs) {
   return attrs.entityLabel;
 }
 
@@ -78,6 +87,14 @@ export function docJSONToStructured(docJSON) {
           entityId: node.attrs.entityId,
           entityLabel: node.attrs.entityLabel,
         });
+      } else if (node.type === "entityLink") {
+        content.push({
+          type: "entityLink",
+          moduleKey: node.attrs.moduleKey,
+          moduleLabel: node.attrs.moduleLabel,
+          entityId: node.attrs.entityId,
+          entityLabel: node.attrs.entityLabel,
+        });
       }
     });
   });
@@ -105,6 +122,7 @@ export function docJSONToStructured(docJSON) {
           previous?.type === "moduleChip" ? " " : ""
         }${entityChipPlainText(node)}`;
       }
+      if (node.type === "entityLink") return entityLinkPlainText(node);
       return node.value;
     })
     .join("");

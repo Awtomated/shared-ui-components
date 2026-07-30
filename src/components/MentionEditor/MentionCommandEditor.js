@@ -7,6 +7,7 @@ import FormHelperText from "@mui/material/FormHelperText";
 import { createMentionExtension } from "./mentionExtension";
 import { ModuleChip } from "./moduleChipExtension";
 import { EntityChip } from "./entityChipExtension";
+import { EntityLink } from "./entityLinkExtension";
 import { createSlashCommandExtension } from "./slashCommandExtension";
 import { createRichTextExtensions } from "../RichTextFormattingToolbar/extensions";
 import {
@@ -29,6 +30,10 @@ import {
  *     first "/" (module picker).
  *   - getEntityProvider(moduleKey) => { isEmpty, load(query) => Promise<[{id,label}]> }
  *     - powers the second "/" (entity picker scoped to the chosen module).
+ *   - onNavigateEntity({ moduleKey, entityId, entityLabel }) - called when an
+ *     inserted Insert Link entityLink is clicked. This package has no
+ *     visibility into a host app's route table, so it only forwards the
+ *     click; the host decides how/where to navigate.
  *   - accentColor - hex/css color for mention & chip text, since Tiptap's
  *     renderHTML runs outside React and can't read a theme hook.
  * Any of these can be omitted if a host app only needs a subset (e.g. just
@@ -38,11 +43,16 @@ import {
  * A ref exposes `insertText(text)`, inserting plain text at the current
  * cursor position (falling back to the end of the doc if the editor never
  * had focus) - e.g. for an emoji-picker button that lives outside the
- * editor and can't reach Tiptap's own command API otherwise - and
+ * editor and can't reach Tiptap's own command API otherwise -
+ * `insertEntityLink({ moduleKey, moduleLabel, entityId, entityLabel })`,
+ * inserting a clickable entityLink node (the Composer's "Insert link" button
+ * calls this after entityPickerPopup.js resolves a picked entity), and
  * `getEditor()`, returning the live Tiptap `Editor` instance for anything
- * that needs the real command API, such as RichTextFormattingToolbar.
- * `onEditorReady(editor)` fires once the instance exists, for callers that
- * need it via state/props instead of imperatively through the ref.
+ * that needs the real command API, such as RichTextFormattingToolbar or
+ * entityPickerPopup.js (which needs a live editor to anchor its
+ * ReactRenderer). `onEditorReady(editor)` fires once the instance exists,
+ * for callers that need it via state/props instead of imperatively through
+ * the ref.
  *
  * Bold/italic/strike/underline/lists/checklist/alignment/font-family are
  * enabled so RichTextFormattingToolbar has matching extensions to drive -
@@ -62,6 +72,7 @@ const MentionCommandEditor = forwardRef(function MentionCommandEditor({
   searchMentions,
   searchModules,
   getEntityProvider,
+  onNavigateEntity,
   accentColor,
   minHeight = "24px",
 }, ref) {
@@ -81,10 +92,14 @@ const MentionCommandEditor = forwardRef(function MentionCommandEditor({
       createMentionExtension({ searchMentions, accentColor }),
       accentColor ? ModuleChip.configure({ accentColor }) : ModuleChip,
       accentColor ? EntityChip.configure({ accentColor }) : EntityChip,
+      EntityLink.configure({
+        onNavigateEntity,
+        ...(accentColor ? { accentColor } : {}),
+      }),
       createSlashCommandExtension({ searchModules, getEntityProvider }),
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [placeholder, searchMentions, searchModules, getEntityProvider, accentColor]
+    [placeholder, searchMentions, searchModules, getEntityProvider, onNavigateEntity, accentColor]
   );
 
   const editor = useEditor({
@@ -114,6 +129,14 @@ const MentionCommandEditor = forwardRef(function MentionCommandEditor({
     insertText: (text) => {
       if (!editor) return;
       editor.chain().focus().insertContent(text).run();
+    },
+    insertEntityLink: (payload) => {
+      if (!editor) return;
+      editor
+        .chain()
+        .focus()
+        .insertContent({ type: "entityLink", attrs: payload })
+        .run();
     },
     getEditor: () => editor,
   }), [editor]);
