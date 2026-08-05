@@ -6,7 +6,8 @@
   "exports": {
     ".": "./dist/index.js",
     "./MentionEditor": "./dist/components/MentionEditor/index.js",
-    "./RichTextFormattingToolbar": "./dist/components/RichTextFormattingToolbar/index.js"
+    "./RichTextFormattingToolbar": "./dist/components/RichTextFormattingToolbar/index.js",
+    "./DataTable": "./dist/components/DataTable/index.js"
   },
   "files": [
     "dist"
@@ -33,9 +34,11 @@
     "@tiptap/extension-text-align": "^2.0.0",
     "@tiptap/extension-task-list": "^2.0.0",
     "@tiptap/extension-task-item": "^2.0.0",
-    "react-window": "^1.0.0 || ^2.0.0"
+    "react-window": "^1.0.0 || ^2.0.0",
+    "@mui/x-data-grid-pro": ">=7.0.0"
   },
   "peerDependenciesMeta": {
+    "@mui/x-data-grid-pro": { "optional": true },
     "@tiptap/core": { "optional": true },
     "@tiptap/pm": { "optional": true },
     "@tiptap/react": { "optional": true },

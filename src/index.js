@@ -12,6 +12,12 @@ export * from "./components/EmojiPicker";
 export * from "./components/SearchInput";
 export * from "./components/CommonPopover";
 export * from "./components/StandaloneUnavailable";
+export * from "./components/ActionMenu";
+// DataTable is intentionally NOT re-exported here - it depends on the paid
+// @mui/x-data-grid-pro peer dependency, which not every root-entry consumer
+// installs (same reasoning as the MentionEditor/RichTextFormattingToolbar
+// notes below). Import it from the "./DataTable" subpath instead - see
+// package.json's "exports" map.
 // Only the toolbar component itself, not the whole ./RichTextFormattingToolbar
 // barrel - that barrel also re-exports createRichTextExtensions, which
 // imports @tiptap/* packages (see extensions.js). Re-exporting that here
