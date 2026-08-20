@@ -7,6 +7,7 @@ import {
 } from "react";
 import { List as VirtualList } from "react-window";
 import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
 import List from "@mui/material/List";
 import ListItemButton from "@mui/material/ListItemButton";
 import ListItemIcon from "@mui/material/ListItemIcon";
@@ -187,29 +188,41 @@ const CommandDropdownList = forwardRef(
     const [rows, setRows] = useState([]);
     const [loading, setLoading] = useState(resolvedMode !== "module");
     const [isEmptyProvider, setIsEmptyProvider] = useState(false);
+    const [loadError, setLoadError] = useState(false);
+    const [retryToken, setRetryToken] = useState(0);
 
     useEffect(() => {
       if (resolvedMode === "module") {
         setRows(flattenModules(searchModules(query)));
+        setLoadError(false);
         setLoading(false);
         return undefined;
       }
 
       let active = true;
       setLoading(true);
+      setLoadError(false);
       const timer = setTimeout(async () => {
-        if (resolvedMode === "grouped") {
-          const groups = await Promise.resolve(searchMentions(query));
-          if (active) {
-            setRows(flattenGroups(groups));
-            setLoading(false);
+        try {
+          if (resolvedMode === "grouped") {
+            const groups = await Promise.resolve(searchMentions(query));
+            if (active) {
+              setRows(flattenGroups(groups));
+              setLoading(false);
+            }
+          } else if (resolvedMode === "entity") {
+            const provider = getEntityProvider(moduleKey) || EMPTY_ENTITY_PROVIDER;
+            const results = await provider.load(query);
+            if (active) {
+              setRows(flattenEntities(results));
+              setIsEmptyProvider(provider.isEmpty);
+              setLoading(false);
+            }
           }
-        } else if (resolvedMode === "entity") {
-          const provider = getEntityProvider(moduleKey) || EMPTY_ENTITY_PROVIDER;
-          const results = await provider.load(query);
+        } catch {
           if (active) {
-            setRows(flattenEntities(results));
-            setIsEmptyProvider(provider.isEmpty);
+            setRows([]);
+            setLoadError(true);
             setLoading(false);
           }
         }
@@ -220,7 +233,7 @@ const CommandDropdownList = forwardRef(
         clearTimeout(timer);
       };
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [resolvedMode, moduleKey, query]);
+    }, [resolvedMode, moduleKey, query, retryToken]);
 
     const selectableIndexes = useMemo(
       () =>
@@ -268,13 +281,35 @@ const CommandDropdownList = forwardRef(
       );
     }
 
+    if (loadError) {
+      return (
+        <Paper elevation={4} sx={{ minWidth: 220, p: 1.5 }}>
+          <Stack spacing={1} alignItems="flex-start">
+            <Typography variant="body2" color="text.secondary">
+              Something went wrong.
+            </Typography>
+            <Button size="small" onClick={() => setRetryToken((token) => token + 1)}>
+              Retry
+            </Button>
+          </Stack>
+        </Paper>
+      );
+    }
+
     if (!rows.length) {
+      const emptyMessage = (() => {
+        if (resolvedMode === "module") return "No modules available";
+        if (resolvedMode === "entity") {
+          return isEmptyProvider
+            ? `${moduleLabel || "This module"} search coming soon`
+            : `No ${moduleLabel || "results"} found`;
+        }
+        return "No results found";
+      })();
       return (
         <Paper elevation={4} sx={{ minWidth: 220, p: 1.5 }}>
           <Typography variant="body2" color="text.secondary">
-            {resolvedMode === "entity" && isEmptyProvider
-              ? `${moduleLabel || "This module"} search coming soon`
-              : "No results found"}
+            {emptyMessage}
           </Typography>
         </Paper>
       );

@@ -12,3 +12,5 @@ export { EntityLink } from "./entityLinkExtension";
 export { createMentionExtension } from "./mentionExtension";
 export { createSlashCommandExtension } from "./slashCommandExtension";
 export { openEntityPickerPopup } from "./entityPickerPopup";
+export { MODULE_LINK_TYPES, getModuleLinkType, searchModuleLinkTypes } from "./moduleLinkTypes";
+export { createModuleLinkDataSource } from "./createModuleLinkDataSource";

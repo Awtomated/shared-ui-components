@@ -31,9 +31,9 @@ import {
  *   - getEntityProvider(moduleKey) => { isEmpty, load(query) => Promise<[{id,label}]> }
  *     - powers the second "/" (entity picker scoped to the chosen module).
  *   - onNavigateEntity({ moduleKey, entityId, entityLabel }) - called when an
- *     inserted Insert Link entityLink is clicked. This package has no
- *     visibility into a host app's route table, so it only forwards the
- *     click; the host decides how/where to navigate.
+ *     inserted entityLink (Insert Link button) or entityChip ("/" command) is
+ *     clicked. This package has no visibility into a host app's route table,
+ *     so it only forwards the click; the host decides how/where to navigate.
  *   - accentColor - hex/css color for mention & chip text, since Tiptap's
  *     renderHTML runs outside React and can't read a theme hook.
  * Any of these can be omitted if a host app only needs a subset (e.g. just
@@ -91,7 +91,10 @@ const MentionCommandEditor = forwardRef(function MentionCommandEditor({
       ...createRichTextExtensions(),
       createMentionExtension({ searchMentions, accentColor }),
       accentColor ? ModuleChip.configure({ accentColor }) : ModuleChip,
-      accentColor ? EntityChip.configure({ accentColor }) : EntityChip,
+      EntityChip.configure({
+        onNavigateEntity,
+        ...(accentColor ? { accentColor } : {}),
+      }),
       EntityLink.configure({
         onNavigateEntity,
         ...(accentColor ? { accentColor } : {}),

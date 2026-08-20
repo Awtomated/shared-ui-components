@@ -42,9 +42,13 @@ export function openEntityPickerPopup({ anchorEl, editor, searchModules, getEnti
       editor
     );
 
-    const rect = anchorEl.getBoundingClientRect();
-    panel.element.style.top = `${rect.bottom + window.scrollY + 4}px`;
-    panel.element.style.left = `${rect.left + window.scrollX}px`;
+    // panel.reposition (not a one-off style.top/left assignment) both clamps
+    // to the viewport and - via createFloatingPanel's ResizeObserver - keeps
+    // reclamping as the panel grows, e.g. when EntityPickerPanel advances
+    // from the module step to the entity step and gains a search TextField.
+    // Without this, a popup opened low in the viewport can have its entity
+    // step pushed off-screen with no way to bring it back into view.
+    panel.reposition(() => anchorEl.getBoundingClientRect());
 
     function onOutsideClick(event) {
       if (!panel.element.contains(event.target) && event.target !== anchorEl) {
