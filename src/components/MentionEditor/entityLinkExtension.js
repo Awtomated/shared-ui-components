@@ -48,6 +48,14 @@ export const EntityLink = Node.create({
         renderHTML: (attributes) =>
           attributes.entityId ? { "data-entity-id": attributes.entityId } : {},
       },
+      entityCode: {
+        default: null,
+        parseHTML: (element) => element.getAttribute("data-entity-code"),
+        renderHTML: (attributes) =>
+          attributes.entityCode
+            ? { "data-entity-code": attributes.entityCode }
+            : {},
+      },
       entityLabel: {
         default: null,
         parseHTML: (element) => element.getAttribute("data-entity-label"),
@@ -60,6 +68,31 @@ export const EntityLink = Node.create({
   },
   parseHTML() {
     return [{ tag: 'a[data-type="entityLink"]' }];
+  },
+  // See moduleChipExtension.js: `selectable: false` leaves Backspace as a
+  // no-op right after this node unless it's deleted manually here, the same
+  // way @tiptap/extension-mention handles its own selectable:false atom.
+  addKeyboardShortcuts() {
+    return {
+      Backspace: () =>
+        this.editor.commands.command(({ tr, state }) => {
+          const { selection } = state;
+          if (!selection.empty) return false;
+          let deleted = false;
+          state.doc.nodesBetween(
+            selection.anchor - 1,
+            selection.anchor,
+            (node, pos) => {
+              if (node.type.name === this.name) {
+                tr.delete(pos, pos + node.nodeSize);
+                deleted = true;
+                return false;
+              }
+            }
+          );
+          return deleted;
+        }),
+    };
   },
   // Rendered outside React (Tiptap's renderHTML), so styling is built from
   // this.options rather than a theme hook - see moduleChipExtension.js.
@@ -105,6 +138,7 @@ export const EntityLink = Node.create({
             onNavigateEntity?.({
               moduleKey: target.getAttribute("data-module-key"),
               entityId: target.getAttribute("data-entity-id"),
+              entityCode: target.getAttribute("data-entity-code"),
               entityLabel: target.getAttribute("data-entity-label"),
             });
             return true;

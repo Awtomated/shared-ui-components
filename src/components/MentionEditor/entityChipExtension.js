@@ -41,6 +41,14 @@ export const EntityChip = Node.create({
         renderHTML: (attributes) =>
           attributes.entityId ? { "data-entity-id": attributes.entityId } : {},
       },
+      entityCode: {
+        default: null,
+        parseHTML: (element) => element.getAttribute("data-entity-code"),
+        renderHTML: (attributes) =>
+          attributes.entityCode
+            ? { "data-entity-code": attributes.entityCode }
+            : {},
+      },
       entityLabel: {
         default: null,
         parseHTML: (element) => element.getAttribute("data-entity-label"),
@@ -53,6 +61,31 @@ export const EntityChip = Node.create({
   },
   parseHTML() {
     return [{ tag: 'span[data-type="entityChip"]' }];
+  },
+  // See moduleChipExtension.js: `selectable: false` leaves Backspace as a
+  // no-op right after this chip unless it's deleted manually here, the same
+  // way @tiptap/extension-mention handles its own selectable:false atom.
+  addKeyboardShortcuts() {
+    return {
+      Backspace: () =>
+        this.editor.commands.command(({ tr, state }) => {
+          const { selection } = state;
+          if (!selection.empty) return false;
+          let deleted = false;
+          state.doc.nodesBetween(
+            selection.anchor - 1,
+            selection.anchor,
+            (node, pos) => {
+              if (node.type.name === this.name) {
+                tr.delete(pos, pos + node.nodeSize);
+                deleted = true;
+                return false;
+              }
+            }
+          );
+          return deleted;
+        }),
+    };
   },
   // Styled identically to moduleChipExtension.js's plain-text underline so the
   // two read as one continuous "module -> entity" phrase rather than distinct
@@ -102,6 +135,7 @@ export const EntityChip = Node.create({
             onNavigateEntity?.({
               moduleKey: target.getAttribute("data-module-key"),
               entityId: target.getAttribute("data-entity-id"),
+              entityCode: target.getAttribute("data-entity-code"),
               entityLabel: target.getAttribute("data-entity-label"),
             });
             return true;

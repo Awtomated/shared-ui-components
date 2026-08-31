@@ -35,6 +35,7 @@ function EntityPickerPanel({ searchModules, getEntityProvider, onCommit, onDismi
           moduleKey: payload.moduleKey,
           moduleLabel: payload.moduleLabel,
           entityId: payload.entityId,
+          entityCode: payload.entityCode,
           entityLabel: payload.entityLabel,
         });
       }

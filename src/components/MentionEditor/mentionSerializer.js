@@ -27,6 +27,7 @@ export function extractModuleEntityPairs(content) {
         moduleKey: node.moduleKey,
         moduleLabel: node.moduleLabel,
         entityId: next.entityId,
+        entityCode: next.entityCode,
         entityLabel: next.entityLabel,
       });
     }
@@ -85,6 +86,7 @@ export function docJSONToStructured(docJSON) {
           type: "entityChip",
           moduleKey: node.attrs.moduleKey,
           entityId: node.attrs.entityId,
+          entityCode: node.attrs.entityCode,
           entityLabel: node.attrs.entityLabel,
         });
       } else if (node.type === "entityLink") {
@@ -93,6 +95,7 @@ export function docJSONToStructured(docJSON) {
           moduleKey: node.attrs.moduleKey,
           moduleLabel: node.attrs.moduleLabel,
           entityId: node.attrs.entityId,
+          entityCode: node.attrs.entityCode,
           entityLabel: node.attrs.entityLabel,
         });
       }

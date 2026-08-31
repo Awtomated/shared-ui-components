@@ -83,6 +83,7 @@ function flattenEntities(entities) {
     key: entity.id,
     id: entity.id,
     label: entity.label,
+    code: entity.code,
   }));
 }
 
@@ -261,6 +262,7 @@ const CommandDropdownList = forwardRef(
           moduleKey,
           moduleLabel,
           entityId: row.id,
+          entityCode: row.code,
           entityLabel: row.label,
         });
       }

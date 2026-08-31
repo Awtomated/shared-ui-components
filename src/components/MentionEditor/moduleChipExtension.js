@@ -45,6 +45,35 @@ export const ModuleChip = Node.create({
   parseHTML() {
     return [{ tag: 'span[data-type="moduleChip"]' }];
   },
+  // `selectable: false` means ProseMirror's default Backspace chain
+  // (deleteSelection -> joinBackward -> selectNodeBackward) can never turn
+  // the cursor sitting right after this chip into a NodeSelection - so
+  // without this handler, Backspace right after a moduleChip is a silent
+  // no-op. @tiptap/extension-mention hits the same issue for its own
+  // selectable:false atom and fixes it exactly this way (see
+  // mentionExtension.js) - mirrored here.
+  addKeyboardShortcuts() {
+    return {
+      Backspace: () =>
+        this.editor.commands.command(({ tr, state }) => {
+          const { selection } = state;
+          if (!selection.empty) return false;
+          let deleted = false;
+          state.doc.nodesBetween(
+            selection.anchor - 1,
+            selection.anchor,
+            (node, pos) => {
+              if (node.type.name === this.name) {
+                tr.delete(pos, pos + node.nodeSize);
+                deleted = true;
+                return false;
+              }
+            }
+          );
+          return deleted;
+        }),
+    };
+  },
   // Rendered outside React (Tiptap's renderHTML), so styling is built from
   // this.options rather than a theme hook - see MentionCommandEditor.js.
   // Deliberately no trailing space is inserted after this chip (see
