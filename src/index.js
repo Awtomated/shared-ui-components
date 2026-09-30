@@ -29,3 +29,5 @@ export * from "./components/ActionMenu";
 export { default as RichTextFormattingToolbar } from "./components/RichTextFormattingToolbar/RichTextFormattingToolbar";
 export * from "./components/ToolbarIconButton";
 export * from "./components/VisibilitySelector";
+export * from "./components/FileTypeIcon";
+export * from "./components/DriveAttachment";

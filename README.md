@@ -31,4 +31,7 @@ Then `npm run build` (or `yarn build`) inside `shared-ui/` whenever you change i
 
   Any of these can be omitted if a host app only needs a subset (e.g. just "@" mentions) — the missing trigger renders empty results instead of erroring. Also exports `EMPTY_DESCRIPTION_VALUE`, `extractMentions`, `extractModuleEntityPairs`, `docJSONToStructured` for turning the editor's structured `{ content, plainText }` value into an API payload.
 
+- `DriveAttachment` — Attachments field with Upload / Drive tabs and a persistent "Selected files" list. Headless: it renders caller-supplied `uploadRecords` and reports picks via `onFilesAdded` / `onDriveFilesSelected`; the Drive browser itself is caller-supplied via `renderDrive({ multiSelect, onFilesSelected, selectedIds })`, so this package never depends on drive-mf. The Drive slot has its own Suspense + error boundary: a Drive load failure shows an inline "Drive unavailable" state (Retry → `onDriveRetry`) while Upload, the selected-files list and the parent form keep working. See `main-app/src/app/shared-components/DocumentUpload/DocumentUploader.jsx`.
+- `FileTypeIcon`, `getFileTypeConfig` — outline file/folder icon with a file-type glyph by extension.
+
 See `main-app/src/app/main/Timesheet/components/LogTimePopover.js` for a live example of both.
