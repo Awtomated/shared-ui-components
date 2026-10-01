@@ -1,4 +1,4 @@
-import { Component, Suspense, useCallback, useMemo, useState } from "react";
+import { Suspense, useCallback, useMemo, useState } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import CircularProgress from "@mui/material/CircularProgress";
@@ -13,16 +13,13 @@ import RefreshIcon from "@mui/icons-material/Refresh";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CloseIcon from "@mui/icons-material/Close";
 import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
-import CloudUploadOutlinedIcon from "@mui/icons-material/CloudUploadOutlined";
-import CloudQueueIcon from "@mui/icons-material/CloudQueue";
 import CloudOffOutlinedIcon from "@mui/icons-material/CloudOffOutlined";
 import FileTypeIcon from "../FileTypeIcon/FileTypeIcon";
 import { formatFileSize } from "./formatFileSize";
+import { resolveTabs } from "./tabConfig";
+import TabBoundary from "./TabBoundary";
 
-const TAB_CONFIG = {
-  upload: { label: "Upload", icon: <CloudUploadOutlinedIcon sx={{ fontSize: 16 }} /> },
-  drive: { label: "Drive", icon: <CloudQueueIcon sx={{ fontSize: 16 }} /> },
-};
+const DEFAULT_TAB_ERROR_MESSAGE = "This tab is unavailable right now.";
 
 // Thin, unobtrusive scrollbar for the containers this component owns
 // directly (Upload's own overflow box, the selected-files list) - kept as a
@@ -259,11 +256,16 @@ function DriveLoading() {
   );
 }
 
-function DriveUnavailable({ message, onRetry, onUseUpload }) {
+function DriveUnavailable({
+  message,
+  onRetry,
+  onUseUpload,
+  testId = "drive-attachment-drive-error",
+}) {
   return (
     <Box
       role="alert"
-      data-testid="drive-attachment-drive-error"
+      data-testid={testId}
       sx={{
         flex: 1,
         display: "flex",
@@ -296,39 +298,33 @@ function DriveUnavailable({ message, onRetry, onUseUpload }) {
   );
 }
 
-// Contains any failure from the caller-supplied Drive content (a remote that
-// fails to load, a render-time crash inside it) to the Drive tab only, so it
-// can never propagate to - and unmount/reload - the surrounding form or
-// modal. A class component because error boundaries still require one;
-// deliberately self-contained so this package takes no react-error-boundary
-// dependency.
-class DriveErrorBoundary extends Component {
-  constructor(props) {
-    super(props);
-    this.state = { error: null };
-  }
-
-  static getDerivedStateFromError(error) {
-    return { error };
-  }
-
-  componentDidCatch(error, info) {
-    this.props.onError?.(error, info);
-  }
-
-  render() {
-    if (this.state.error) return this.props.fallback;
-    return this.props.children;
-  }
-}
-
 /**
- * Attachments field: a tab shell for attaching files via local upload or
- * Drive, plus a persistent "Selected files" list. Moved here from
- * file-management-mf's AttachFileTabs (which now wraps this) so any module
- * can reuse the same UI.
+ * Attachments field: a tab shell for attaching files via local upload,
+ * Drive, or any caller-supplied tab, plus a persistent "Selected files"
+ * list. Moved here from file-management-mf's AttachFileTabs (which now wraps
+ * this) so any module can reuse the same UI.
  *
- * Headless with respect to both transports:
+ * Tabs:
+ * - `tabs` is a list of tab ids - it alone decides which tabs show and in
+ *   what order, e.g. ["upload", "project", "drive", "compose"].
+ * - `tabConfigInfo` optionally overrides the built-in TAB_CONFIG per id,
+ *   shallowly (caller wins): `{ [id]: { label, icon, component, props,
+ *   disabled, fixedHeight, contentSx, errorMessage, onRetry, onError } }`.
+ *   Keys not listed in `tabs` are ignored.
+ * - If a tab has a `component`, it replaces that tab's content (including
+ *   the built-in "upload"/"drive" content). Otherwise the built-in content
+ *   renders. An id with neither ("project" with no component) is skipped.
+ * - `component` receives the shared tab context below, then `props` on top:
+ *   { uploadRecords, onFilesAdded, onRemoveRecord, onRetryRecord,
+ *     acceptExtensions, dropzoneHint, driveMultiSelect, onDriveFilesSelected,
+ *     driveSelectedIds, activeTab, setActiveTab }.
+ *   Pass a stable component (module-level or memoized) - an inline one
+ *   remounts, and loses its state, on every parent render.
+ * - Each `component` is wrapped in its own Suspense + error boundary (same
+ *   treatment as Drive below): a failure shows an inline unavailable state in
+ *   that tab only; Retry remounts it and calls its `onRetry`.
+ *
+ * Headless with respect to both built-in transports:
  * - Upload: renders `uploadRecords` the caller supplies and reports raw
  *   file picks/drops via `onFilesAdded` - never uploads anything itself.
  * - Drive: the Drive browser is caller-supplied via
@@ -348,11 +344,13 @@ class DriveErrorBoundary extends Component {
  *
  * `height` defaults to a fixed pixel value (not '100%') because an inline
  * Drive grid's own scroll container typically needs a bounded ancestor to
- * resolve against - a plain form field has none. Pass height="100%" only
+ * resolve against - a plain form field has none. It applies only while a
+ * `fixedHeight` tab (Drive by default) is active. Pass height="100%" only
  * inside something that genuinely provides a bounded height (e.g. a Dialog).
  */
 function DriveAttachment({
   tabs = ["upload", "drive"],
+  tabConfigInfo,
   defaultTab,
   bordered = true,
   height = 460,
@@ -379,32 +377,105 @@ function DriveAttachment({
         .map((r) => r.driveNodeId),
     [uploadRecords]
   );
+  const resolvedTabs = useMemo(
+    () => resolveTabs(tabs, tabConfigInfo),
+    [tabs, tabConfigInfo]
+  );
+  const tabIds = resolvedTabs.map((t) => t.id);
   // Only evaluated once, at mount. `defaultTab` wins when given (a caller
   // that seeds preselected Drive files in an effect has no records yet on
   // first render); otherwise records already present at mount mean "opened
   // with preselected Drive files", so open on Drive then.
-  const [activeTab, setActiveTab] = useState(() => {
-    const defaultIndex = defaultTab ? tabs.indexOf(defaultTab) : -1;
-    if (defaultIndex !== -1) return defaultIndex;
-    const driveIndex = tabs.indexOf("drive");
-    return uploadRecords.length > 0 && driveIndex !== -1 ? driveIndex : 0;
+  const [activeId, setActiveId] = useState(() => {
+    if (defaultTab && tabIds.includes(defaultTab)) return defaultTab;
+    if (uploadRecords.length > 0 && tabIds.includes("drive")) return "drive";
+    return tabIds[0];
   });
-  // Bumped on Retry to remount the Drive slot's boundary + Suspense fresh.
+  // Tracked by id, not index, so a caller adding/removing tabs never leaves
+  // it pointing at the wrong tab. If the active tab is removed, settle on
+  // the first one (so it doesn't jump back if that tab is re-added later).
+  const activeTab = resolvedTabs.find((t) => t.id === activeId) ?? resolvedTabs[0];
+  if (activeTab && activeTab.id !== activeId) setActiveId(activeTab.id);
+  const activeTabId = activeTab?.id;
+  const fixedHeight = Boolean(activeTab?.fixedHeight);
+
+  // Bumped on Retry to remount a tab's boundary + Suspense fresh.
   const [driveAttempt, setDriveAttempt] = useState(0);
-  const activeTabId = tabs[activeTab];
+  const [tabAttempts, setTabAttempts] = useState({});
   // Drive's own scroll chain needs a bounded ancestor height (see `height`
   // above), so it keeps the fixed height. Upload sizes to content, which
   // lets the modal collapse to just the dropzone when nothing is attached.
-  const containerHeight = activeTabId === "drive" ? height : undefined;
+  const containerHeight = fixedHeight ? height : undefined;
 
   const handleDriveRetry = useCallback(() => {
     onDriveRetry?.();
     setDriveAttempt((a) => a + 1);
   }, [onDriveRetry]);
 
-  const uploadIndex = tabs.indexOf("upload");
-  const handleUseUpload =
-    uploadIndex !== -1 ? () => setActiveTab(uploadIndex) : undefined;
+  const handleTabRetry = useCallback(
+    (tab) => {
+      const onRetry = tab.onRetry ?? (tab.id === "drive" ? onDriveRetry : undefined);
+      onRetry?.();
+      setTabAttempts((a) => ({ ...a, [tab.id]: (a[tab.id] || 0) + 1 }));
+    },
+    [onDriveRetry]
+  );
+
+  const handleUseUpload = tabIds.includes("upload")
+    ? () => setActiveId("upload")
+    : undefined;
+
+  // Everything a caller-supplied tab component needs to act like a
+  // built-in tab (add/remove records, keep its own selection in sync).
+  const tabContext = {
+    uploadRecords,
+    onFilesAdded,
+    onRemoveRecord,
+    onRetryRecord,
+    acceptExtensions,
+    dropzoneHint,
+    driveMultiSelect,
+    onDriveFilesSelected,
+    driveSelectedIds,
+    activeTab: activeTabId,
+    setActiveTab: setActiveId,
+  };
+
+  const renderComponentTab = (tab) => {
+    const TabComponent = tab.component;
+    const isDrive = tab.id === "drive";
+    return (
+      <Box
+        key={tab.id}
+        sx={{
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          minHeight: 0,
+          ...(fixedHeight && { overflow: "hidden", ...NESTED_THIN_SCROLLBAR_SX }),
+        }}
+      >
+        <TabBoundary
+          key={tabAttempts[tab.id] || 0}
+          onError={tab.onError ?? (isDrive ? onDriveError : undefined)}
+          fallback={
+            <DriveUnavailable
+              message={
+                tab.errorMessage ?? (isDrive ? driveErrorMessage : DEFAULT_TAB_ERROR_MESSAGE)
+              }
+              onRetry={() => handleTabRetry(tab)}
+              onUseUpload={tab.id !== "upload" ? handleUseUpload : undefined}
+              testId={`drive-attachment-tab-error-${tab.id}`}
+            />
+          }
+        >
+          <Suspense fallback={<DriveLoading />}>
+            <TabComponent {...tabContext} {...tab.props} />
+          </Suspense>
+        </TabBoundary>
+      </Box>
+    );
+  };
 
   return (
     <Box
@@ -426,20 +497,22 @@ function DriveAttachment({
     >
       <Box sx={{ borderBottom: 1, borderColor: "divider", flexShrink: 0 }}>
         <Tabs
-          value={activeTab}
-          onChange={(_, v) => setActiveTab(v)}
+          value={activeTabId ?? false}
+          onChange={(_, v) => setActiveId(v)}
           sx={{
             px: 1,
             "& .MuiTab-root": { minHeight: 44, fontSize: 13, textTransform: "none", gap: 0.5, py: 0 },
             "& .MuiTab-iconWrapper": { mb: "0 !important" },
           }}
         >
-          {tabs.map((id) => (
+          {resolvedTabs.map((tab) => (
             <Tab
-              key={id}
-              icon={TAB_CONFIG[id].icon}
+              key={tab.id}
+              value={tab.id}
+              icon={tab.icon}
               iconPosition="start"
-              label={TAB_CONFIG[id].label}
+              label={tab.label}
+              disabled={tab.disabled}
             />
           ))}
         </Tabs>
@@ -451,18 +524,19 @@ function DriveAttachment({
           overflow: "hidden",
           display: "flex",
           flexDirection: "column",
-          minHeight: activeTabId === "drive" ? 220 : 0,
-          ...(activeTabId === "drive" && { px: 2, py: 1.5 }),
+          minHeight: fixedHeight ? 220 : 0,
+          ...activeTab?.contentSx,
         }}
       >
-        {activeTabId === "upload" && (
+        {activeTab?.component && renderComponentTab(activeTab)}
+        {!activeTab?.component && activeTabId === "upload" && (
           <UploadTabContent
             onFilesAdded={onFilesAdded}
             acceptExtensions={acceptExtensions}
             dropzoneHint={dropzoneHint}
           />
         )}
-        {activeTabId === "drive" && (
+        {!activeTab?.component && activeTabId === "drive" && (
           <Box
             sx={{
               flex: 1,
@@ -473,7 +547,7 @@ function DriveAttachment({
               ...NESTED_THIN_SCROLLBAR_SX,
             }}
           >
-            <DriveErrorBoundary
+            <TabBoundary
               key={driveAttempt}
               onError={onDriveError}
               fallback={
@@ -491,7 +565,7 @@ function DriveAttachment({
                   selectedIds: driveSelectedIds,
                 })}
               </Suspense>
-            </DriveErrorBoundary>
+            </TabBoundary>
           </Box>
         )}
       </Box>

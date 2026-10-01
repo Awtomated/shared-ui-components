@@ -32,6 +32,22 @@ Then `npm run build` (or `yarn build`) inside `shared-ui/` whenever you change i
   Any of these can be omitted if a host app only needs a subset (e.g. just "@" mentions) — the missing trigger renders empty results instead of erroring. Also exports `EMPTY_DESCRIPTION_VALUE`, `extractMentions`, `extractModuleEntityPairs`, `docJSONToStructured` for turning the editor's structured `{ content, plainText }` value into an API payload.
 
 - `DriveAttachment` — Attachments field with Upload / Drive tabs and a persistent "Selected files" list. Headless: it renders caller-supplied `uploadRecords` and reports picks via `onFilesAdded` / `onDriveFilesSelected`; the Drive browser itself is caller-supplied via `renderDrive({ multiSelect, onFilesSelected, selectedIds })`, so this package never depends on drive-mf. The Drive slot has its own Suspense + error boundary: a Drive load failure shows an inline "Drive unavailable" state (Retry → `onDriveRetry`) while Upload, the selected-files list and the parent form keep working. See `main-app/src/app/shared-components/DocumentUpload/DocumentUploader.jsx`.
+
+  Custom / overridden tabs: `tabs` (list of ids) decides which tabs show and their order; the optional `tabConfigInfo` map overrides the built-in config per id (shallow, caller wins). If an entry has a `component`, it replaces that tab's content (also for the built-in `upload` / `drive`); otherwise the built-in content renders. An id with neither built-in content nor a `component` is skipped.
+
+  ```jsx
+  <DriveAttachment
+    tabs={["upload", "project", "drive", "compose"]}
+    tabConfigInfo={{
+      drive: { label: "My Drive" },                                  // label only, built-in content
+      project: { label: "Project", icon: <FolderIcon />, component: ProjectFilesTab },
+      compose: { component: ComposeTab, props: { draftId } },        // label falls back to "Compose"
+    }}
+    {...existingProps}
+  />
+  ```
+
+  Entry keys: `label`, `icon`, `component`, `props`, `disabled`, `fixedHeight` (use the `height` prop while active; Drive defaults to `true`), `contentSx`, `errorMessage`, `onRetry`, `onError`. `component` receives `{ uploadRecords, onFilesAdded, onRemoveRecord, onRetryRecord, acceptExtensions, dropzoneHint, driveMultiSelect, onDriveFilesSelected, driveSelectedIds, activeTab, setActiveTab }` with `props` spread on top, and is wrapped in its own Suspense + error boundary. Pass a stable `component` (module-level or memoized) — an inline one remounts on every parent render. The built-in defaults are exported as `DRIVE_ATTACHMENT_TAB_CONFIG`.
 - `FileTypeIcon`, `getFileTypeConfig` — outline file/folder icon with a file-type glyph by extension.
 
 See `main-app/src/app/main/Timesheet/components/LogTimePopover.js` for a live example of both.
