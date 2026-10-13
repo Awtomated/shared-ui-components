@@ -58,6 +58,94 @@ describe("DriveAttachment", () => {
       expect(screen.getByText("Selected files (1)")).toBeInTheDocument();
     });
 
+    it("shows the dropzone subtitle and an info tooltip from props", async () => {
+      render(
+        <DriveAttachment
+          tabs={["upload"]}
+          dropzoneHint="Supported: PDF, DOCX"
+          dropzoneTooltip="Only editor files"
+        />
+      );
+      expect(screen.getByTestId("drive-attachment-dropzone-hint")).toHaveTextContent(
+        "Supported: PDF, DOCX"
+      );
+      fireEvent.mouseOver(screen.getByTestId("drive-attachment-dropzone-info"));
+      expect(await screen.findByText("Only editor files")).toBeInTheDocument();
+    });
+
+    it("shows the full subtitle in a tooltip only when it is truncated", async () => {
+      render(<DriveAttachment tabs={["upload"]} dropzoneHint="Editor friendly files: PDF" />);
+      const hint = screen.getByTestId("drive-attachment-dropzone-hint");
+
+      fireEvent.mouseOver(hint);
+      expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+      fireEvent.mouseLeave(hint);
+
+      Object.defineProperty(hint, "scrollWidth", { configurable: true, value: 300 });
+      Object.defineProperty(hint, "clientWidth", { configurable: true, value: 100 });
+      fireEvent.mouseOver(hint);
+      expect(await screen.findByRole("tooltip")).toHaveTextContent(
+        "Editor friendly files: PDF"
+      );
+    });
+
+    it("opens the file picker on a dropzone click, even with the info icon", () => {
+      render(<DriveAttachment tabs={["upload"]} dropzoneTooltip="Only editor files" />);
+      const input = screen.getByTestId("drive-attachment-file-input");
+      const onInputClick = jest.fn();
+      input.addEventListener("click", onInputClick);
+
+      fireEvent.click(screen.getByText("Select or drag files from your computer"));
+      expect(onInputClick).toHaveBeenCalledTimes(1);
+
+      fireEvent.click(screen.getByTestId("drive-attachment-dropzone-info"));
+      expect(onInputClick).toHaveBeenCalledTimes(1);
+    });
+
+    it("has no info icon without dropzoneTooltip", () => {
+      render(<DriveAttachment tabs={["upload"]} />);
+      expect(screen.queryByTestId("drive-attachment-dropzone-info")).not.toBeInTheDocument();
+    });
+
+    it("filters picked and dropped files by acceptExtensions", () => {
+      const onFilesAdded = jest.fn();
+      const onFilesRejected = jest.fn();
+      render(
+        <DriveAttachment
+          tabs={["upload"]}
+          acceptExtensions={["pdf", ".DOCX"]}
+          onFilesAdded={onFilesAdded}
+          onFilesRejected={onFilesRejected}
+        />
+      );
+      const pdf = new File(["x"], "brief.PDF", { type: "application/pdf" });
+      const docx = new File(["x"], "spec.docx");
+      const exe = new File(["x"], "setup.exe");
+      const input = screen.getByTestId("drive-attachment-file-input");
+      expect(input).toHaveAttribute("accept", ".pdf,.docx");
+
+      fireEvent.change(input, { target: { files: [pdf, exe] } });
+      expect(onFilesAdded).toHaveBeenLastCalledWith([pdf]);
+      expect(onFilesRejected).toHaveBeenLastCalledWith([exe]);
+
+      fireEvent.drop(screen.getByTestId("drive-attachment-dropzone"), {
+        dataTransfer: { files: [exe, docx] },
+      });
+      expect(onFilesAdded).toHaveBeenLastCalledWith([docx]);
+      expect(onFilesRejected).toHaveBeenLastCalledWith([exe]);
+    });
+
+    it("does not call onFilesAdded when every file is rejected", () => {
+      const onFilesAdded = jest.fn();
+      render(
+        <DriveAttachment tabs={["upload"]} acceptExtensions={["pdf"]} onFilesAdded={onFilesAdded} />
+      );
+      fireEvent.change(screen.getByTestId("drive-attachment-file-input"), {
+        target: { files: [new File(["x"], "setup.exe")] },
+      });
+      expect(onFilesAdded).not.toHaveBeenCalled();
+    });
+
     it("contains a Drive failure to the Drive tab and retries it", () => {
       const onDriveRetry = jest.fn();
       const onDriveError = jest.fn();

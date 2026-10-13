@@ -1,4 +1,4 @@
-import { Suspense, useCallback, useMemo, useState } from "react";
+import { Suspense, useCallback, useId, useMemo, useState } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import CircularProgress from "@mui/material/CircularProgress";
@@ -14,6 +14,7 @@ import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CloseIcon from "@mui/icons-material/Close";
 import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
 import CloudOffOutlinedIcon from "@mui/icons-material/CloudOffOutlined";
+import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import FileTypeIcon from "../FileTypeIcon/FileTypeIcon";
 import { formatFileSize } from "./formatFileSize";
 import { resolveTabs } from "./tabConfig";
@@ -44,17 +45,18 @@ const NESTED_THIN_SCROLLBAR_SX = {
 // Single-line name that only shows a tooltip when it's actually truncated -
 // matches the host's Text (showTooltip, wrap={false}) this replaced, without
 // depending on a host-supplied component.
-function TruncatedName({ text }) {
+function TruncatedText({ text, variant = "subtitle2", placement = "top", sx, ...rest }) {
   const [isTruncated, setIsTruncated] = useState(false);
   return (
-    <Tooltip title={isTruncated ? text : ""} placement="top">
+    <Tooltip title={isTruncated ? text : ""} placement={placement}>
       <Typography
-        variant="subtitle2"
+        variant={variant}
         noWrap
         onMouseEnter={(e) =>
           setIsTruncated(e.currentTarget.scrollWidth > e.currentTarget.clientWidth)
         }
-        sx={{ maxWidth: "100%", display: "block" }}
+        sx={{ maxWidth: "100%", display: "block", ...sx }}
+        {...rest}
       >
         {text}
       </Typography>
@@ -93,7 +95,7 @@ function UploadFileRow({ record, onRemove, onRetry }) {
       </Box>
 
       <Box sx={{ flex: 1, minWidth: 0 }}>
-        <TruncatedName text={record.name} />
+        <TruncatedText text={record.name} />
         <Typography variant="caption" color={isError ? "error.main" : "text.secondary"}>
           {isError ? record.error || "Upload failed" : formatFileSize(record.size)}
         </Typography>
@@ -133,20 +135,64 @@ function UploadFileRow({ record, onRemove, onRetry }) {
   );
 }
 
+// "pdf", ".PDF" and " pdf" all mean the same extension.
+const normalizeExtension = (ext) =>
+  String(ext).trim().replace(/^\./, "").toLowerCase();
+
+const extensionOf = (fileName = "") => {
+  const dot = fileName.lastIndexOf(".");
+  return dot === -1 ? "" : fileName.slice(dot + 1).toLowerCase();
+};
+
+// Splits picked/dropped files by `acceptExtensions`. The input's `accept`
+// attribute only filters the picker (and can be bypassed with "All files"),
+// and drops ignore it entirely, so every path is checked here.
+const partitionByExtension = (fileList, acceptExtensions) => {
+  const files = Array.from(fileList || []);
+  if (!acceptExtensions?.length) return { accepted: files, rejected: [] };
+  const allowed = new Set(acceptExtensions.map(normalizeExtension));
+  return files.reduce(
+    (result, file) => {
+      result[allowed.has(extensionOf(file.name)) ? "accepted" : "rejected"].push(file);
+      return result;
+    },
+    { accepted: [], rejected: [] }
+  );
+};
+
 // Dropzone only - the selected/uploaded-file rows render persistently at
 // the DriveAttachment level instead (below whichever tab is active), since
 // that state belongs to the Attachments field as a whole, not to this one
 // tab's own content.
-function UploadTabContent({ onFilesAdded, acceptExtensions, dropzoneHint }) {
+function UploadTabContent({
+  onFilesAdded,
+  onFilesRejected,
+  acceptExtensions,
+  dropzoneHint,
+  dropzoneTooltip,
+}) {
   const [isDragOver, setIsDragOver] = useState(false);
+  // The label must point at the input explicitly - otherwise it targets its
+  // first labelable descendant, which is the info <button> when
+  // dropzoneTooltip is set, and a dropzone click never reaches the picker.
+  const inputId = useId();
   const acceptAttr = acceptExtensions?.length
-    ? acceptExtensions.map((e) => `.${e}`).join(",")
+    ? acceptExtensions.map((e) => `.${normalizeExtension(e)}`).join(",")
     : undefined;
+
+  // Copied into arrays before the input is reset - clearing the input can
+  // empty the live FileList it handed out.
+  const handleFiles = (fileList) => {
+    const { accepted, rejected } = partitionByExtension(fileList, acceptExtensions);
+    if (accepted.length) onFilesAdded?.(accepted);
+    if (rejected.length) onFilesRejected?.(rejected);
+  };
 
   return (
     <Box sx={{ p: 2, height: "100%", overflow: "auto", ...THIN_SCROLLBAR_SX }}>
       <Box
         component="label"
+        htmlFor={inputId}
         data-testid="drive-attachment-dropzone"
         onDragOver={(e) => {
           e.preventDefault();
@@ -156,7 +202,7 @@ function UploadTabContent({ onFilesAdded, acceptExtensions, dropzoneHint }) {
         onDrop={(e) => {
           e.preventDefault();
           setIsDragOver(false);
-          onFilesAdded?.(e.dataTransfer.files);
+          handleFiles(e.dataTransfer.files);
         }}
         sx={{
           border: "2px dashed",
@@ -173,24 +219,47 @@ function UploadTabContent({ onFilesAdded, acceptExtensions, dropzoneHint }) {
         }}
       >
         <DescriptionOutlinedIcon sx={{ fontSize: 40, color: "primary.main" }} />
-        <Box sx={{ textAlign: "center" }}>
-          <Typography variant="body2" fontWeight={600}>
-            Select or drag files from your computer
-          </Typography>
-          {dropzoneHint && (
-            <Typography variant="caption" sx={{ color: "text.secondary" }}>
-              {dropzoneHint}
+        {/* maxWidth/minWidth bound the subtitle so it can ellipsize. */}
+        <Box sx={{ textAlign: "center", maxWidth: "100%", minWidth: 0 }}>
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 0.5 }}>
+            <Typography variant="body2" fontWeight={600}>
+              Select or drag files from your computer
             </Typography>
+            {dropzoneTooltip && (
+              <Tooltip title={dropzoneTooltip} placement="top" arrow>
+                <IconButton
+                  size="small"
+                  aria-label="Supported file types"
+                  data-testid="drive-attachment-dropzone-info"
+                  // Inside the <label> - keep a click here from opening the picker.
+                  onClick={(e) => e.preventDefault()}
+                  sx={{ p: 0.25 }}
+                >
+                  <InfoOutlinedIcon sx={{ fontSize: 18, color: "text.secondary" }} />
+                </IconButton>
+              </Tooltip>
+            )}
+          </Box>
+          {/* One line; the full text shows in a tooltip only when cut off. */}
+          {dropzoneHint && (
+            <TruncatedText
+              text={dropzoneHint}
+              variant="caption"
+              placement="bottom"
+              data-testid="drive-attachment-dropzone-hint"
+              sx={{ color: "text.secondary" }}
+            />
           )}
         </Box>
         <input
+          id={inputId}
           type="file"
           multiple
           accept={acceptAttr}
           data-testid="drive-attachment-file-input"
           style={{ display: "none" }}
           onChange={(e) => {
-            onFilesAdded?.(e.target.files);
+            handleFiles(e.target.files);
             e.target.value = "";
           }}
         />
@@ -316,8 +385,9 @@ function DriveUnavailable({
  *   renders. An id with neither ("project" with no component) is skipped.
  * - `component` receives the shared tab context below, then `props` on top:
  *   { uploadRecords, onFilesAdded, onRemoveRecord, onRetryRecord,
- *     acceptExtensions, dropzoneHint, driveMultiSelect, onDriveFilesSelected,
- *     driveSelectedIds, activeTab, setActiveTab }.
+ *     onFilesRejected, acceptExtensions, dropzoneHint, dropzoneTooltip,
+ *     driveMultiSelect, onDriveFilesSelected, driveSelectedIds, activeTab,
+ *     setActiveTab }.
  *   Pass a stable component (module-level or memoized) - an inline one
  *   remounts, and loses its state, on every parent render.
  * - Each `component` is wrapped in its own Suspense + error boundary (same
@@ -325,8 +395,12 @@ function DriveUnavailable({
  *   that tab only; Retry remounts it and calls its `onRetry`.
  *
  * Headless with respect to both built-in transports:
- * - Upload: renders `uploadRecords` the caller supplies and reports raw
- *   file picks/drops via `onFilesAdded` - never uploads anything itself.
+ * - Upload: renders `uploadRecords` the caller supplies and reports
+ *   file picks/drops (as an array) via `onFilesAdded` - never uploads
+ *   anything itself. With `acceptExtensions` (e.g. ["pdf", "docx"]) both
+ *   picks and drops are filtered by file extension; the rest go to
+ *   `onFilesRejected`. `dropzoneHint` is the dropzone's subtitle and
+ *   `dropzoneTooltip` adds an info icon next to its title.
  * - Drive: the Drive browser is caller-supplied via
  *   `renderDrive({ multiSelect, onFilesSelected, selectedIds })`, so this
  *   package never depends on drive-mf or any API. `selectedIds` are the
@@ -358,8 +432,10 @@ function DriveAttachment({
   onFilesAdded,
   onRemoveRecord,
   onRetryRecord,
+  onFilesRejected,
   acceptExtensions,
   dropzoneHint,
+  dropzoneTooltip,
   driveMultiSelect = true,
   onDriveFilesSelected,
   renderDrive,
@@ -432,8 +508,10 @@ function DriveAttachment({
     onFilesAdded,
     onRemoveRecord,
     onRetryRecord,
+    onFilesRejected,
     acceptExtensions,
     dropzoneHint,
+    dropzoneTooltip,
     driveMultiSelect,
     onDriveFilesSelected,
     driveSelectedIds,
@@ -532,8 +610,10 @@ function DriveAttachment({
         {!activeTab?.component && activeTabId === "upload" && (
           <UploadTabContent
             onFilesAdded={onFilesAdded}
+            onFilesRejected={onFilesRejected}
             acceptExtensions={acceptExtensions}
             dropzoneHint={dropzoneHint}
+            dropzoneTooltip={dropzoneTooltip}
           />
         )}
         {!activeTab?.component && activeTabId === "drive" && (
