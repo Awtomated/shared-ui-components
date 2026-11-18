@@ -1,0 +1,57 @@
+# CI for @awtomated/shared-ui: install from the lockfile (which runs the `prepare` build, exactly
+# as a consuming app does when it installs this package from GitHub), a clean build, and a check
+# that every entry point named in package.json exists in dist/.
+#
+# The repo defines no lint and no test runner, so there is nothing else to run.
+#
+# Self-contained on purpose: the shared reusable workflow in awtomated-infra (private) cannot be
+# called from this public repo, and the CI App secrets it needs are not shared with it.
+name: CI
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [share-component]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.repository }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  node:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24' # this repo declares none; 24 is what main-app's .nvmrc uses
+          cache: yarn
+      - name: Install dependencies (runs the prepare build)
+        id: install
+        run: yarn install --frozen-lockfile --network-timeout 600000
+      - name: Build
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: |
+          rm -rf dist
+          yarn build
+      - name: Check package entry points
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: |
+          node -e "
+            const fs = require('fs');
+            const pkg = require('./package.json');
+            const targets = [pkg.main, ...Object.values(pkg.exports)];
+            const missing = targets.filter((f) => !fs.existsSync(f));
+            if (missing.length) {
+              console.error('Missing build outputs: ' + missing.join(', '));
+              process.exit(1);
+            }
+            console.log('OK: ' + targets.length + ' entry points built');
+          "

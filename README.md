@@ -4,11 +4,15 @@ Framework-agnostic UI components shared between the Awtomated host app (`main-ap
 
 ## Install (git dependency)
 
+The package is not published to a registry. Install it straight from this repository, pinned to a commit:
+
 ```json
-"@awtomated/shared-ui": "git+https://<host>/<org>/shared-ui.git#v0.1.0"
+"@awtomated/shared-ui": "https://github.com/Awtomated/shared-ui-components.git#<commit sha>"
 ```
 
 `npm`/`yarn` run this package's own `prepare` script (`npm run build`) right after cloning, so no build artifacts need to be committed to the repo.
+
+Without the `#<commit sha>` the consumer takes whatever the default branch (`share-component`) holds when its lockfile is next refreshed, so pin it.
 
 ## Local development (before pushing to a remote)
 
@@ -51,3 +55,14 @@ Then `npm run build` (or `yarn build`) inside `shared-ui/` whenever you change i
 - `FileTypeIcon`, `getFileTypeConfig` — outline file/folder icon with a file-type glyph by extension.
 
 See `main-app/src/app/main/Timesheet/components/LogTimePopover.js` for a live example of both.
+
+## CI and releasing
+
+CI (GitHub Actions, `.github/workflows/ci.yml`, Node 24) runs on every pull request and on pushes to `share-component`: `yarn install --frozen-lockfile` (which runs the `prepare` build), a clean `yarn build`, and a check that every entry point in `package.json` (`main` and `exports`) exists in `dist/`. The repo has no lint and no test runner configured.
+
+Nothing is published to a package registry. To ship a new version:
+
+1. Merge the pull request here into `share-component`.
+2. In each consuming repo (`main-app`, `drive-mfe`, `workflow-mfe`, `notes-mfe`), set the pinned commit in `package.json` to the new commit sha (`"@awtomated/shared-ui": "https://github.com/Awtomated/shared-ui-components.git#<commit sha>"`), refresh the lockfile and open a pull request there.
+
+Never run `npm publish`.
